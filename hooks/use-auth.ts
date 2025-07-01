@@ -47,8 +47,16 @@ export function useAuth() {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist, this is expected for new users
+          console.log('Profile not found for user:', userId);
+        } else {
+          throw error;
+        }
+      } else {
+        setProfile(data);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -56,9 +64,62 @@ export function useAuth() {
     }
   };
 
+  const createProfileManually = async (userId: string, email: string, fullName: string, phone: string, role: 'buyer' | 'seller') => {
+    try {
+      console.log('Creating profile manually for user:', userId);
+      
+      // First try using the database function
+      const { data: functionResult, error: functionError } = await supabase
+        .rpc('create_profile_if_missing', {
+          user_id: userId,
+          user_email: email,
+          user_full_name: fullName,
+          user_phone: phone,
+          user_role: role
+        });
+
+      if (functionError) {
+        console.error('Function error:', functionError);
+        // Fallback to direct insert
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            email: email,
+            full_name: fullName,
+            phone: phone,
+            role: role,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          if (error.code === '23505') {
+            // Profile already exists, fetch it
+            console.log('Profile already exists, fetching...');
+            await fetchProfile(userId);
+            return;
+          }
+          throw error;
+        }
+        
+        setProfile(data);
+      } else {
+        console.log('Profile creation function result:', functionResult);
+        // Fetch the created profile
+        await fetchProfile(userId);
+      }
+    } catch (error) {
+      console.error('Error creating profile manually:', error);
+      throw error;
+    }
+  };
+
   const signUp = async (email: string, password: string, fullName: string, phone: string, role: 'buyer' | 'seller') => {
     try {
-      // Sign up the user with metadata - the trigger will handle profile creation
+      console.log('Starting signup process for:', email);
+      
+      // Sign up the user with metadata - no email verification required
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -68,54 +129,38 @@ export function useAuth() {
             phone: phone,
             role: role,
           },
+          // Disable email verification
+          emailRedirectTo: undefined,
         },
       });
 
       if (authError) throw authError;
 
-      // Wait a moment for the trigger to create the profile
       if (authData.user) {
-        // Try to fetch the profile, and if it doesn't exist, create it manually
+        console.log('User created successfully:', authData.user.id);
+        
+        // Since email verification is disabled, the user should be immediately available
+        // Wait a shorter time for the trigger to create the profile
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        try {
-          const { data: existingProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
+        // Check if profile was created by the trigger
+        const { data: existingProfile, error: profileCheckError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
 
-          if (!existingProfile) {
-            // Profile doesn't exist, create it manually
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .insert({
-                id: authData.user.id,
-                email: email,
-                full_name: fullName,
-                phone: phone,
-                role: role,
-              });
-
-            if (profileError) {
-              console.error('Manual profile creation error:', profileError);
-            }
-          }
-        } catch (profileFetchError) {
-          // If we can't fetch the profile, try to create it
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: authData.user.id,
-              email: email,
-              full_name: fullName,
-              phone: phone,
-              role: role,
-            });
-
-          if (profileError && !profileError.message.includes('duplicate key')) {
-            console.error('Manual profile creation error:', profileError);
-          }
+        if (profileCheckError && profileCheckError.code === 'PGRST116') {
+          // Profile doesn't exist, create it manually
+          console.log('Profile not found, creating manually...');
+          await createProfileManually(authData.user.id, email, fullName, phone, role);
+        } else if (profileCheckError) {
+          console.error('Error checking for existing profile:', profileCheckError);
+          // Try to create it anyway
+          await createProfileManually(authData.user.id, email, fullName, phone, role);
+        } else {
+          console.log('Profile already exists:', existingProfile);
+          setProfile(existingProfile);
         }
       }
 
