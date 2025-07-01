@@ -89,12 +89,13 @@ export function AuthForm() {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
     const fullName = formData.get('fullName') as string;
+    const phone = formData.get('phone') as string;
     const role = formData.get('role') as 'buyer' | 'seller';
 
     setUserEmail(email);
 
     try {
-      await signUp(email, password, fullName, role);
+      await signUp(email, password, fullName, phone, role);
       toast.success('Account created successfully!');
       router.push('/dashboard');
     } catch (err: any) {
@@ -231,6 +232,16 @@ export function AuthForm() {
                     name="email"
                     type="email"
                     required
+                    className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-phone">Phone Number</Label>
+                  <Input
+                    id="signup-phone"
+                    name="phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
                     className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

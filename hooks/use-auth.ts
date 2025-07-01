@@ -56,20 +56,74 @@ export function useAuth() {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'buyer' | 'seller') => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: role,
+  const signUp = async (email: string, password: string, fullName: string, phone: string, role: 'buyer' | 'seller') => {
+    try {
+      // Sign up the user with metadata - the trigger will handle profile creation
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone: phone,
+            role: role,
+          },
         },
-      },
-    });
+      });
 
-    if (error) throw error;
-    return data;
+      if (authError) throw authError;
+
+      // Wait a moment for the trigger to create the profile
+      if (authData.user) {
+        // Try to fetch the profile, and if it doesn't exist, create it manually
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
+
+          if (!existingProfile) {
+            // Profile doesn't exist, create it manually
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert({
+                id: authData.user.id,
+                email: email,
+                full_name: fullName,
+                phone: phone,
+                role: role,
+              });
+
+            if (profileError) {
+              console.error('Manual profile creation error:', profileError);
+            }
+          }
+        } catch (profileFetchError) {
+          // If we can't fetch the profile, try to create it
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              email: email,
+              full_name: fullName,
+              phone: phone,
+              role: role,
+            });
+
+          if (profileError && !profileError.message.includes('duplicate key')) {
+            console.error('Manual profile creation error:', profileError);
+          }
+        }
+      }
+
+      return authData;
+    } catch (error) {
+      console.error('Sign up error:', error);
+      throw error;
+    }
   };
 
   const signIn = async (email: string, password: string) => {

@@ -39,11 +39,13 @@ export default function ProfilePage() {
 
     const formData = new FormData(e.currentTarget);
     const fullName = formData.get('fullName') as string;
+    const phone = formData.get('phone') as string;
     const role = formData.get('role') as 'buyer' | 'seller';
 
     try {
       await updateProfile({
         full_name: fullName,
+        phone: phone,
         role: role,
       });
 
@@ -184,6 +186,18 @@ export default function ProfilePage() {
                       name="fullName"
                       defaultValue={profile.full_name}
                       required
+                      className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      defaultValue={profile.phone || ''}
+                      placeholder="+1 (555) 123-4567"
                       className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

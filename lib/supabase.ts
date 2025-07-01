@@ -13,6 +13,7 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
+          phone: string | null;
           role: 'buyer' | 'seller' | 'admin';
           avatar_url: string | null;
           created_at: string;
@@ -22,6 +23,7 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
+          phone?: string | null;
           role?: 'buyer' | 'seller' | 'admin';
           avatar_url?: string | null;
           created_at?: string;
@@ -31,6 +33,7 @@ export type Database = {
           id?: string;
           email?: string;
           full_name?: string;
+          phone?: string | null;
           role?: 'buyer' | 'seller' | 'admin';
           avatar_url?: string | null;
           created_at?: string;
