@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,31 +11,69 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield } from 'lucide-react';
+import { Loader2, Shield, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function AuthForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showResendButton, setShowResendButton] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
   const { signIn, signUp } = useAuth();
   const router = useRouter();
+
+  const handleResendVerification = async () => {
+    if (!userEmail) {
+      toast.error('Please enter your email address first');
+      return;
+    }
+
+    setIsResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: userEmail,
+      });
+
+      if (error) throw error;
+      
+      toast.success('Verification email sent! Please check your inbox.');
+      setShowResendButton(false);
+      setError(null);
+    } catch (err: any) {
+      toast.error('Failed to resend verification email');
+      console.error('Resend error:', err);
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setShowResendButton(false);
 
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+
+    setUserEmail(email);
 
     try {
       await signIn(email, password);
       toast.success('Welcome back!');
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message);
-      toast.error('Failed to sign in');
+      if (err.message === 'Email not confirmed') {
+        setError('Your email is not confirmed. Please check your inbox for a confirmation link.');
+        setShowResendButton(true);
+        toast.error('Please confirm your email address');
+      } else {
+        setError(err.message);
+        toast.error('Failed to sign in');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -44,6 +83,7 @@ export function AuthForm() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setShowResendButton(false);
 
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
@@ -51,13 +91,21 @@ export function AuthForm() {
     const fullName = formData.get('fullName') as string;
     const role = formData.get('role') as 'buyer' | 'seller';
 
+    setUserEmail(email);
+
     try {
       await signUp(email, password, fullName, role);
       toast.success('Account created successfully!');
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message);
-      toast.error('Failed to create account');
+      if (err.message === 'Email not confirmed') {
+        setError('Your email is not confirmed. Please check your inbox for a confirmation link.');
+        setShowResendButton(true);
+        toast.error('Please confirm your email address');
+      } else {
+        setError(err.message);
+        toast.error('Failed to create account');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -90,6 +138,39 @@ export function AuthForm() {
               <Alert variant="destructive" className="mb-4">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {showResendButton && (
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Email verification required
+                  </p>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
+                  Didn't receive the email? Check your spam folder or resend it.
+                </p>
+                <Button
+                  onClick={handleResendVerification}
+                  disabled={isResending}
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-900/20"
+                >
+                  {isResending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mr-2 h-4 w-4" />
+                      Resend Verification Email
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
 
             <TabsContent value="signin">
