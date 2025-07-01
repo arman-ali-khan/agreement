@@ -17,6 +17,7 @@ interface Stats {
 export function DashboardStats() {
   const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, active: 0, completed: 0, fulfilled: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -29,12 +30,18 @@ export function DashboardStats() {
     if (!user) return;
 
     try {
+      setError(null);
+      console.log('Fetching stats for user:', user.id);
+
       const { data, error } = await supabase
         .from('contracts')
         .select('status')
         .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching stats:', error);
+        throw error;
+      }
 
       const stats = data.reduce(
         (acc, contract) => {
@@ -58,9 +65,12 @@ export function DashboardStats() {
         { total: 0, pending: 0, active: 0, completed: 0, fulfilled: 0 }
       );
 
+      console.log('Stats fetched successfully:', stats);
       setStats(stats);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching stats:', error);
+      setError(error.message);
+      // Don't show error toast for stats, just log it
     } finally {
       setLoading(false);
     }
@@ -120,6 +130,36 @@ export function DashboardStats() {
             </CardContent>
           </Card>
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {statCards.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={index} className="hover:shadow-lg transition-all duration-200 border-0 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  {stat.title}
+                </CardTitle>
+                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                  <Icon className={`h-4 w-4 ${stat.textColor}`} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+                  --
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Unable to load
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     );
   }

@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
 
@@ -35,15 +36,36 @@ export default function DashboardPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && profile) {
       fetchContracts();
     }
-  }, [user]);
+  }, [user, profile]);
 
   const fetchContracts = async () => {
-    if (!user) return;
+    if (!user) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
 
     try {
+      setError(null);
+      console.log('Fetching contracts for user:', user.id);
+
+      // First, let's test the basic connection
+      const { data: testData, error: testError } = await supabase
+        .from('contracts')
+        .select('id')
+        .limit(1);
+
+      if (testError) {
+        console.error('Database connection test failed:', testError);
+        throw new Error(`Database connection failed: ${testError.message}`);
+      }
+
+      console.log('Database connection successful');
+
+      // Now fetch contracts with profile data
       const { data, error } = await supabase
         .from('contracts')
         .select(`
@@ -54,11 +76,17 @@ export default function DashboardPage() {
         .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching contracts:', error);
+        throw new Error(`Failed to fetch contracts: ${error.message}`);
+      }
+
+      console.log('Contracts fetched successfully:', data?.length || 0);
       setContracts(data || []);
-    } catch (error) {
-      console.error('Error fetching contracts:', error);
-      toast.error('Failed to load contracts');
+    } catch (error: any) {
+      console.error('Error in fetchContracts:', error);
+      setError(error.message || 'Failed to load contracts');
+      toast.error(error.message || 'Failed to load contracts');
     } finally {
       setLoading(false);
     }
@@ -109,6 +137,39 @@ export default function DashboardPage() {
           <DashboardStats />
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6">
+            <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+              <CardContent className="pt-6">
+                <div className="flex items-center space-x-2">
+                  <div className="text-red-600 dark:text-red-400">
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                      Error loading contracts
+                    </h3>
+                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                      {error}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={fetchContracts} 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900"
+                >
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Search and Filters */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -143,7 +204,7 @@ export default function DashboardPage() {
                 </Card>
               ))}
             </div>
-          ) : contracts.length === 0 ? (
+          ) : contracts.length === 0 && !error ? (
             <Card className="text-center py-12">
               <CardContent>
                 <div className="flex justify-center mb-4">
