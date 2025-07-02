@@ -212,7 +212,7 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center space-x-3 p-3 border rounded-lg">
           <Avatar className="h-8 w-8">
             <AvatarImage src={otherParty?.avatar_url || ''} />
             <AvatarFallback>{otherParty?.full_name?.charAt(0).toUpperCase()}</AvatarFallback>
@@ -225,7 +225,7 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
 
         <div className="space-y-2">
           <h4 className="text-sm font-medium">Terms & Conditions</h4>
-          <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{contract.terms}</p>
+          <p className="text-sm border p-3 rounded-lg">{contract.terms}</p>
         </div>
 
         {contract.file_url && (

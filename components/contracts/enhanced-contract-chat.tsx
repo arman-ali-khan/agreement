@@ -17,8 +17,6 @@ import {
   File, 
   Smile,
   Reply,
-  Edit3,
-  Trash2,
   Users
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -56,23 +54,24 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [showReactions, setShowReactions] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (contractId) {
+    if (contractId && user) {
+      console.log('Setting up chat for contract:', contractId, 'user:', user.id);
       fetchMessages();
       fetchAdminSessions();
-      subscribeToMessages();
-      subscribeToReactions();
-      subscribeToAdminSessions();
+      
+      // Set up real-time subscriptions
+      const cleanup = setupRealtimeSubscriptions();
+      
+      return cleanup;
     }
-  }, [contractId]);
+  }, [contractId, user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -83,33 +82,33 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
   };
 
   const fetchMessages = async () => {
+    if (!contractId) return;
+    
     try {
-      setError(null);
       console.log('Fetching messages for contract:', contractId);
 
-      // First, try a simple query without nested relationships
-      const { data: simpleMessages, error: simpleError } = await supabase
+      // Fetch messages
+      const { data: messagesData, error: messagesError } = await supabase
         .from('contract_messages')
         .select('*')
         .eq('contract_id', contractId)
         .order('created_at', { ascending: true });
 
-      if (simpleError) {
-        console.error('Error fetching simple messages:', simpleError);
-        throw simpleError;
+      if (messagesError) {
+        console.error('Error fetching messages:', messagesError);
+        throw messagesError;
       }
 
-      console.log('Simple messages fetched:', simpleMessages?.length || 0);
-
-      if (!simpleMessages || simpleMessages.length === 0) {
+      if (!messagesData || messagesData.length === 0) {
         setMessages([]);
+        setLoading(false);
         return;
       }
 
       // Get unique user IDs from messages
-      const userIds = Array.from(new Set(simpleMessages.map(m => m.user_id)));
+      const userIds = Array.from(new Set(messagesData.map(m => m.user_id)));
       
-      // Fetch user profiles separately
+      // Fetch user profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -117,7 +116,6 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
 
       if (profilesError) {
         console.error('Error fetching profiles:', profilesError);
-        // Continue without profiles rather than failing completely
       }
 
       // Create a map of profiles for quick lookup
@@ -128,8 +126,33 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
         });
       }
 
-      // Combine messages with profile data
-      const messagesWithProfiles = simpleMessages.map(message => ({
+      // Fetch reactions for all messages
+      const messageIds = messagesData.map(m => m.id);
+      const { data: reactionsData, error: reactionsError } = await supabase
+        .from('contract_message_reactions')
+        .select('*')
+        .in('message_id', messageIds);
+
+      if (reactionsError) {
+        console.error('Error fetching reactions:', reactionsError);
+      }
+
+      // Group reactions by message
+      const reactionsMap = new Map();
+      if (reactionsData) {
+        reactionsData.forEach(reaction => {
+          if (!reactionsMap.has(reaction.message_id)) {
+            reactionsMap.set(reaction.message_id, []);
+          }
+          reactionsMap.get(reaction.message_id).push({
+            ...reaction,
+            user: profilesMap.get(reaction.user_id) || { full_name: 'Unknown User' }
+          });
+        });
+      }
+
+      // Combine messages with profile data and reactions
+      const messagesWithData = messagesData.map(message => ({
         ...message,
         user: profilesMap.get(message.user_id) || {
           id: message.user_id,
@@ -141,16 +164,15 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           created_at: '',
           updated_at: ''
         },
-        reactions: [], // We'll fetch these separately if needed
-        reply_to: null // We'll handle replies separately if needed
+        reactions: reactionsMap.get(message.id) || [],
+        reply_to: null
       }));
 
-      setMessages(messagesWithProfiles);
-      console.log('Messages with profiles set:', messagesWithProfiles.length);
+      setMessages(messagesWithData);
+      console.log('Messages loaded successfully:', messagesWithData.length);
 
     } catch (error: any) {
       console.error('Error fetching messages:', error);
-      setError(error.message || 'Failed to load messages');
       toast.error('Failed to load messages');
     } finally {
       setLoading(false);
@@ -158,6 +180,8 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
   };
 
   const fetchAdminSessions = async () => {
+    if (!contractId) return;
+    
     try {
       const { data, error } = await supabase
         .from('admin_chat_sessions')
@@ -179,9 +203,19 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
     }
   };
 
-  const subscribeToMessages = () => {
-    const channel = supabase
-      .channel(`contract_messages:${contractId}`)
+  const setupRealtimeSubscriptions = () => {
+    console.log('Setting up real-time subscriptions for contract:', contractId);
+
+    // Create a unique channel for this contract
+    const channel = supabase.channel(`contract-chat-${contractId}`, {
+      config: {
+        broadcast: { self: true },
+        presence: { key: user?.id }
+      }
+    });
+
+    // Subscribe to message inserts
+    channel
       .on(
         'postgres_changes',
         {
@@ -191,7 +225,8 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           filter: `contract_id=eq.${contractId}`,
         },
         async (payload) => {
-          console.log('New message received:', payload);
+          console.log('Real-time: New message received', payload);
+          
           // Fetch the user profile for the new message
           const { data: userProfile } = await supabase
             .from('profiles')
@@ -199,7 +234,7 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
             .eq('id', payload.new.user_id)
             .single();
 
-          const newMessage = {
+          const newMessage: Message = {
             ...payload.new,
             user: userProfile || {
               id: payload.new.user_id,
@@ -215,19 +250,16 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
             reply_to: null
           };
 
-          setMessages(prev => [...prev, newMessage]);
+          setMessages(prev => {
+            // Check if message already exists to prevent duplicates
+            const exists = prev.some(msg => msg.id === newMessage.id);
+            if (exists) return prev;
+            
+            return [...prev, newMessage];
+          });
         }
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const subscribeToReactions = () => {
-    const channel = supabase
-      .channel(`message_reactions:${contractId}`)
+      // Subscribe to reaction changes
       .on(
         'postgres_changes',
         {
@@ -235,21 +267,13 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           schema: 'public',
           table: 'contract_message_reactions',
         },
-        () => {
+        (payload) => {
+          console.log('Real-time: Reaction change detected', payload);
           // Refresh messages to get updated reactions
           fetchMessages();
         }
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const subscribeToAdminSessions = () => {
-    const channel = supabase
-      .channel(`admin_sessions:${contractId}`)
+      // Subscribe to admin session changes
       .on(
         'postgres_changes',
         {
@@ -258,22 +282,34 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           table: 'admin_chat_sessions',
           filter: `contract_id=eq.${contractId}`,
         },
-        () => {
+        (payload) => {
+          console.log('Real-time: Admin session change detected', payload);
           fetchAdminSessions();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('Real-time subscription status:', status, err);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to real-time updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Real-time subscription error:', err);
+        }
+      });
 
+    // Cleanup function
     return () => {
+      console.log('Cleaning up real-time subscriptions');
       supabase.removeChannel(channel);
     };
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !user) return;
+    if (!newMessage.trim() || !user || !contractId) return;
 
     setSending(true);
     try {
+      console.log('Sending message:', newMessage);
+      
       const messageData = {
         contract_id: contractId,
         user_id: user.id,
@@ -282,11 +318,18 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
         reply_to_id: replyingTo?.id || null,
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('contract_messages')
-        .insert(messageData);
+        .insert(messageData)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+      
+      console.log('Message sent successfully:', data);
       setNewMessage('');
       setReplyingTo(null);
     } catch (error) {
@@ -299,10 +342,11 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fileType: 'image' | 'document') => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !contractId) return;
 
     setUploading(true);
     try {
+      console.log('Uploading file:', file.name);
       const fileUrl = await uploadToCloudinary(file);
       
       const { error } = await supabase
@@ -333,6 +377,8 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
     if (!user) return;
 
     try {
+      console.log('Adding reaction:', reaction, 'to message:', messageId);
+      
       const { error } = await supabase
         .from('contract_message_reactions')
         .insert({
@@ -341,8 +387,13 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           reaction,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding reaction:', error);
+        throw error;
+      }
+      
       setShowReactions(null);
+      console.log('Reaction added successfully');
     } catch (error) {
       console.error('Error adding reaction:', error);
       toast.error('Failed to add reaction');
@@ -353,6 +404,8 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
     if (!user) return;
 
     try {
+      console.log('Removing reaction:', reaction, 'from message:', messageId);
+      
       const { error } = await supabase
         .from('contract_message_reactions')
         .delete()
@@ -360,7 +413,12 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
         .eq('user_id', user.id)
         .eq('reaction', reaction);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error removing reaction:', error);
+        throw error;
+      }
+      
+      console.log('Reaction removed successfully');
     } catch (error) {
       console.error('Error removing reaction:', error);
       toast.error('Failed to remove reaction');
@@ -392,28 +450,8 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
     );
   }
 
-  if (error) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Enhanced Real-time Chat</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">Error loading chat: {error}</p>
-              <Button onClick={fetchMessages} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card className="h-96 flex flex-col">
+    <Card className="h-[700px] overflow-hidden flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <div>
@@ -432,7 +470,7 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col p-0">
+      <CardContent className="flex-1 flex flex-col p-0 overflow-y-auto">
         <ScrollArea className="flex-1 px-4">
           <div className="space-y-4 pb-4">
             {messages.length === 0 ? (
@@ -528,9 +566,10 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
                                   addReaction(message.id, reaction);
                                 }
                               }}
-                              className="text-xs bg-white/20 rounded px-1 hover:bg-white/30"
+                              className="text-xs bg-white/20 rounded px-1 hover:bg-white/30 flex items-center space-x-1"
                             >
-                              {reaction} {count}
+                              <span>{reaction}</span>
+                              <span>{count}</span>
                             </button>
                           ))}
                         </div>
@@ -565,7 +604,7 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
                             <button
                               key={reaction}
                               onClick={() => addReaction(message.id, reaction)}
-                              className="hover:bg-white/20 rounded p-1"
+                              className="hover:bg-white/20 rounded p-1 text-lg"
                             >
                               {reaction}
                             </button>

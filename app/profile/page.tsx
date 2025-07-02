@@ -127,7 +127,7 @@ export default function ProfilePage() {
 
                 {/* Avatar Section */}
                 <div className="flex items-center space-x-4">
-                  <Avatar className="h-20 w-20 border-4 border-gray-200 dark:border-gray-700">
+                  <Avatar className="h-20 w-20 rounded-full border-4 border-gray-200 dark:border-gray-700">
                     <AvatarImage src={profile.avatar_url || ''} alt={profile.full_name} />
                     <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xl">
                       {profile.full_name?.charAt(0).toUpperCase()}
