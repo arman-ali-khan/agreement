@@ -16,29 +16,28 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Search, Edit, Trash2, Eye, FileText } from 'lucide-react';
+import { Search, Trash2, Eye, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 type Contract = Database['public']['Tables']['contracts']['Row'] & {
-  buyer: Database['public']['Tables']['profiles']['Row'];
-  seller: Database['public']['Tables']['profiles']['Row'];
+  buyer?: Database['public']['Tables']['profiles']['Row'] | null;
+  seller?: Database['public']['Tables']['profiles']['Row'] | null;
+};
+
+type ContractWithProfiles = Contract & {
+  buyer_name: string;
+  seller_name: string;
+  buyer_email: string;
+  seller_email: string;
 };
 
 export function ContractsManagement() {
-  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [contracts, setContracts] = useState<ContractWithProfiles[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [viewingContract, setViewingContract] = useState<Contract | null>(null);
 
   useEffect(() => {
     fetchContracts();
@@ -46,17 +45,56 @@ export function ContractsManagement() {
 
   const fetchContracts = async () => {
     try {
-      const { data, error } = await supabase
+      // First fetch contracts without profile joins to avoid RLS issues
+      const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
-        .select(`
-          *,
-          buyer:profiles!contracts_buyer_id_fkey(*),
-          seller:profiles!contracts_seller_id_fkey(*)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setContracts(data || []);
+      if (contractsError) throw contractsError;
+
+      if (!contractsData || contractsData.length === 0) {
+        setContracts([]);
+        return;
+      }
+
+      // Get unique user IDs
+      const userIds = Array.from(new Set([
+        ...contractsData.map(c => c.buyer_id),
+        ...contractsData.map(c => c.seller_id)
+      ]));
+
+      // Fetch profiles using service role or admin privileges
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+
+      // Create a map of profiles for quick lookup
+      const profilesMap = new Map();
+      if (profilesData) {
+        profilesData.forEach(profile => {
+          profilesMap.set(profile.id, profile);
+        });
+      }
+
+      // Combine contracts with profile data
+      const contractsWithProfiles: ContractWithProfiles[] = contractsData.map(contract => {
+        const buyer = profilesMap.get(contract.buyer_id);
+        const seller = profilesMap.get(contract.seller_id);
+        
+        return {
+          ...contract,
+          buyer,
+          seller,
+          buyer_name: buyer?.full_name || 'Unknown User',
+          seller_name: seller?.full_name || 'Unknown User',
+          buyer_email: buyer?.email || 'Unknown Email',
+          seller_email: seller?.email || 'Unknown Email',
+        };
+      });
+
+      setContracts(contractsWithProfiles);
     } catch (error) {
       console.error('Error fetching contracts:', error);
       toast.error('Failed to load contracts');
@@ -108,8 +146,9 @@ export function ContractsManagement() {
 
   const filteredContracts = contracts.filter(contract => {
     const matchesSearch = contract.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         contract.buyer.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         contract.seller.full_name.toLowerCase().includes(searchTerm.toLowerCase());
+                         contract.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         contract.buyer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         contract.seller_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus === 'all' || contract.status === selectedStatus;
     return matchesSearch && matchesStatus;
   });
@@ -207,8 +246,8 @@ export function ContractsManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <div><strong>Buyer:</strong> {contract.buyer.full_name}</div>
-                      <div><strong>Seller:</strong> {contract.seller.full_name}</div>
+                      <div><strong>Buyer:</strong> {contract.buyer_name}</div>
+                      <div><strong>Seller:</strong> {contract.seller_name}</div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -221,96 +260,21 @@ export function ContractsManagement() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end space-x-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewingContract(contract)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Contract Details</DialogTitle>
-                            <DialogDescription>
-                              View and manage contract information
-                            </DialogDescription>
-                          </DialogHeader>
-                          {viewingContract && (
-                            <div className="space-y-4">
-                              <div>
-                                <h4 className="font-medium">Title</h4>
-                                <p className="text-sm text-gray-600">{viewingContract.title}</p>
-                              </div>
-                              <div>
-                                <h4 className="font-medium">Description</h4>
-                                <p className="text-sm text-gray-600">{viewingContract.description}</p>
-                              </div>
-                              <div>
-                                <h4 className="font-medium">Terms & Conditions</h4>
-                                <p className="text-sm text-gray-600 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                                  {viewingContract.terms}
-                                </p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <h4 className="font-medium">Buyer</h4>
-                                  <p className="text-sm text-gray-600">{viewingContract.buyer.full_name}</p>
-                                  <p className="text-xs text-gray-500">{viewingContract.buyer.email}</p>
-                                </div>
-                                <div>
-                                  <h4 className="font-medium">Seller</h4>
-                                  <p className="text-sm text-gray-600">{viewingContract.seller.full_name}</p>
-                                  <p className="text-xs text-gray-500">{viewingContract.seller.email}</p>
-                                </div>
-                              </div>
-                              <div>
-                                <h4 className="font-medium">Status</h4>
-                                <Select
-                                  value={viewingContract.status}
-                                  onValueChange={(value) => {
-                                    handleUpdateContractStatus(viewingContract.id, value);
-                                    setViewingContract({ ...viewingContract, status: value });
-                                  }}
-                                >
-                                  <SelectTrigger className="w-48">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="fulfilled">Fulfilled</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    <SelectItem value="disputed">Disputed</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {viewingContract.file_url && (
-                                <div>
-                                  <h4 className="font-medium">Attachment</h4>
-                                  <a 
-                                    href={viewingContract.file_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline text-sm flex items-center"
-                                  >
-                                    <FileText className="h-4 w-4 mr-1" />
-                                    View Attachment
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </DialogContent>
-                      </Dialog>
+                      <Link href={`/contracts/${contract.id}`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          title="View contract details and chat"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleDeleteContract(contract.id)}
                         className="text-red-600 hover:text-red-700"
+                        title="Delete contract"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

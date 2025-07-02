@@ -14,8 +14,15 @@ import { EnhancedContractChat } from './enhanced-contract-chat';
 import { ContractProofs } from './contract-proofs';
 
 type Contract = Database['public']['Tables']['contracts']['Row'] & {
-  buyer: Database['public']['Tables']['profiles']['Row'];
-  seller: Database['public']['Tables']['profiles']['Row'];
+  buyer?: Database['public']['Tables']['profiles']['Row'] | null;
+  seller?: Database['public']['Tables']['profiles']['Row'] | null;
+};
+
+type ContractWithNames = Contract & {
+  buyer_name: string;
+  seller_name: string;
+  buyer_email: string;
+  seller_email: string;
 };
 
 interface ContractDetailsProps {
@@ -23,7 +30,7 @@ interface ContractDetailsProps {
 }
 
 export function ContractDetails({ contractId }: ContractDetailsProps) {
-  const [contract, setContract] = useState<Contract | null>(null);
+  const [contract, setContract] = useState<ContractWithNames | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, profile } = useAuth();
 
@@ -35,18 +42,49 @@ export function ContractDetails({ contractId }: ContractDetailsProps) {
 
   const fetchContract = async () => {
     try {
-      const { data, error } = await supabase
+      // First fetch the contract
+      const { data: contractData, error: contractError } = await supabase
         .from('contracts')
-        .select(`
-          *,
-          buyer:profiles!contracts_buyer_id_fkey(*),
-          seller:profiles!contracts_seller_id_fkey(*)
-        `)
+        .select('*')
         .eq('id', contractId)
         .single();
 
-      if (error) throw error;
-      setContract(data);
+      if (contractError) throw contractError;
+
+      if (!contractData) {
+        setContract(null);
+        return;
+      }
+
+      // Fetch buyer and seller profiles separately to avoid RLS issues
+      const userIds = [contractData.buyer_id, contractData.seller_id];
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url, role')
+        .in('id', userIds);
+
+      // Create a map of profiles for quick lookup
+      const profilesMap = new Map();
+      if (profilesData) {
+        profilesData.forEach(profile => {
+          profilesMap.set(profile.id, profile);
+        });
+      }
+
+      const buyer = profilesMap.get(contractData.buyer_id);
+      const seller = profilesMap.get(contractData.seller_id);
+
+      const contractWithNames: ContractWithNames = {
+        ...contractData,
+        buyer,
+        seller,
+        buyer_name: buyer?.full_name || 'Unknown User',
+        seller_name: seller?.full_name || 'Unknown User',
+        buyer_email: buyer?.email || 'Unknown Email',
+        seller_email: seller?.email || 'Unknown Email',
+      };
+
+      setContract(contractWithNames);
     } catch (error) {
       console.error('Error fetching contract:', error);
     } finally {
@@ -134,13 +172,13 @@ export function ContractDetails({ contractId }: ContractDetailsProps) {
               <h4 className="font-medium text-gray-900 dark:text-gray-100">Buyer</h4>
               <div className="flex items-center space-x-3">
                 <Avatar>
-                  <AvatarImage src={contract.buyer.avatar_url || ''} />
-                  <AvatarFallback>{contract.buyer.full_name.charAt(0).toUpperCase()}</AvatarFallback>
+                  <AvatarImage src={contract.buyer?.avatar_url || ''} />
+                  <AvatarFallback>{contract.buyer_name.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{contract.buyer.full_name}</p>
-                  <p className="text-sm text-gray-500">{contract.buyer.email}</p>
-                  {contract.buyer.role === 'admin' && (
+                  <p className="font-medium">{contract.buyer_name}</p>
+                  <p className="text-sm text-gray-500">{contract.buyer_email}</p>
+                  {contract.buyer?.role === 'admin' && (
                     <Badge className="text-xs bg-red-500 text-white">Admin</Badge>
                   )}
                 </div>
@@ -152,13 +190,13 @@ export function ContractDetails({ contractId }: ContractDetailsProps) {
               <h4 className="font-medium text-gray-900 dark:text-gray-100">Seller</h4>
               <div className="flex items-center space-x-3">
                 <Avatar>
-                  <AvatarImage src={contract.seller.avatar_url || ''} />
-                  <AvatarFallback>{contract.seller.full_name.charAt(0).toUpperCase()}</AvatarFallback>
+                  <AvatarImage src={contract.seller?.avatar_url || ''} />
+                  <AvatarFallback>{contract.seller_name.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{contract.seller.full_name}</p>
-                  <p className="text-sm text-gray-500">{contract.seller.email}</p>
-                  {contract.seller.role === 'admin' && (
+                  <p className="font-medium">{contract.seller_name}</p>
+                  <p className="text-sm text-gray-500">{contract.seller_email}</p>
+                  {contract.seller?.role === 'admin' && (
                     <Badge className="text-xs bg-red-500 text-white">Admin</Badge>
                   )}
                 </div>
