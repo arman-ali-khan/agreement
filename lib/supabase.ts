@@ -120,6 +120,143 @@ export type Database = {
           created_at?: string;
         };
       };
+      contract_messages: {
+        Row: {
+          id: string;
+          contract_id: string;
+          user_id: string;
+          message: string;
+          message_type: 'text' | 'file' | 'system';
+          file_url: string | null;
+          message_status: 'sent' | 'delivered' | 'read';
+          reply_to_id: string | null;
+          edited_at: string | null;
+          file_type: 'image' | 'document' | 'video' | 'audio' | null;
+          file_size: number | null;
+          thumbnail_url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          user_id: string;
+          message: string;
+          message_type?: 'text' | 'file' | 'system';
+          file_url?: string | null;
+          message_status?: 'sent' | 'delivered' | 'read';
+          reply_to_id?: string | null;
+          edited_at?: string | null;
+          file_type?: 'image' | 'document' | 'video' | 'audio' | null;
+          file_size?: number | null;
+          thumbnail_url?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          contract_id?: string;
+          user_id?: string;
+          message?: string;
+          message_type?: 'text' | 'file' | 'system';
+          file_url?: string | null;
+          message_status?: 'sent' | 'delivered' | 'read';
+          reply_to_id?: string | null;
+          edited_at?: string | null;
+          file_type?: 'image' | 'document' | 'video' | 'audio' | null;
+          file_size?: number | null;
+          thumbnail_url?: string | null;
+          created_at?: string;
+        };
+      };
+      contract_proofs: {
+        Row: {
+          id: string;
+          contract_id: string;
+          uploaded_by: string;
+          proof_type: 'delivery' | 'payment' | 'completion' | 'other';
+          file_url: string;
+          file_name: string;
+          description: string | null;
+          status: 'pending' | 'approved' | 'rejected';
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          uploaded_by: string;
+          proof_type: 'delivery' | 'payment' | 'completion' | 'other';
+          file_url: string;
+          file_name: string;
+          description?: string | null;
+          status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          contract_id?: string;
+          uploaded_by?: string;
+          proof_type?: 'delivery' | 'payment' | 'completion' | 'other';
+          file_url?: string;
+          file_name?: string;
+          description?: string | null;
+          status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+      };
+      contract_message_reactions: {
+        Row: {
+          id: string;
+          message_id: string;
+          user_id: string;
+          reaction: '👍' | '👎' | '❤️' | '😊' | '😢' | '😮' | '😡';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          user_id: string;
+          reaction: '👍' | '👎' | '❤️' | '😊' | '😢' | '😮' | '😡';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          message_id?: string;
+          user_id?: string;
+          reaction?: '👍' | '👎' | '❤️' | '😊' | '😢' | '😮' | '😡';
+          created_at?: string;
+        };
+      };
+      admin_chat_sessions: {
+        Row: {
+          id: string;
+          contract_id: string;
+          admin_id: string;
+          joined_at: string;
+          left_at: string | null;
+          is_active: boolean;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          admin_id: string;
+          joined_at?: string;
+          left_at?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          id?: string;
+          contract_id?: string;
+          admin_id?: string;
+          joined_at?: string;
+          left_at?: string | null;
+          is_active?: boolean;
+        };
+      };
     };
   };
 };

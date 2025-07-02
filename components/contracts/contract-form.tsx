@@ -63,17 +63,18 @@ export function ContractForm() {
 
     try {
       // Find buyer and seller profiles
-      const { data: buyerProfile } = await supabase
+      const { data: buyerData } = await supabase
         .from('profiles')
         .select('id')
-        .eq('email', buyerEmail)
-        .single();
+        .eq('email', buyerEmail);
 
-      const { data: sellerProfile } = await supabase
+      const { data: sellerData } = await supabase
         .from('profiles')
         .select('id')
-        .eq('email', sellerEmail)
-        .single();
+        .eq('email', sellerEmail);
+
+      const buyerProfile = buyerData?.[0];
+      const sellerProfile = sellerData?.[0];
 
       if (!buyerProfile || !sellerProfile) {
         throw new Error('One or both parties not found. Please ensure both users have accounts.');

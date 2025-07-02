@@ -16,13 +16,15 @@ import {
   FileText,
   User,
   Upload,
-  Loader2
+  Loader2,
+  Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import Link from 'next/link';
 
 type Contract = Database['public']['Tables']['contracts']['Row'] & {
   buyer: Database['public']['Tables']['profiles']['Row'];
@@ -240,73 +242,83 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
           </div>
         )}
 
-        {isUserInvolved && (
-          <div className="flex flex-wrap gap-2 pt-4 border-t">
-            {contract.status === 'pending' && (
-              <>
+        <div className="flex flex-wrap gap-2 pt-4 border-t">
+          {/* View Details Button */}
+          <Link href={`/contracts/${contract.id}`}>
+            <Button variant="outline" className="flex items-center space-x-2">
+              <Eye className="h-4 w-4" />
+              <span>View Details</span>
+            </Button>
+          </Link>
+
+          {isUserInvolved && (
+            <>
+              {contract.status === 'pending' && (
+                <>
+                  <Button
+                    onClick={handleAccept}
+                    disabled={isLoading}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                    Accept
+                  </Button>
+                  <Button
+                    onClick={handleDecline}
+                    disabled={isLoading}
+                    variant="destructive"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
+                    Decline
+                  </Button>
+                </>
+              )}
+
+              {contract.status === 'active' && userRole === 'seller' && (
                 <Button
-                  onClick={handleAccept}
+                  onClick={handleFulfill}
+                  disabled={isLoading}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Clock className="h-4 w-4 mr-2" />}
+                  Mark as Fulfilled
+                </Button>
+              )}
+
+              {contract.status === 'fulfilled' && userRole === 'buyer' && (
+                <Button
+                  onClick={handleComplete}
                   disabled={isLoading}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                  Accept
+                  Complete Contract
                 </Button>
-                <Button
-                  onClick={handleDecline}
-                  disabled={isLoading}
-                  variant="destructive"
-                >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
-                  Decline
-                </Button>
-              </>
-            )}
+              )}
 
-            {contract.status === 'active' && userRole === 'seller' && (
-              <Button
-                onClick={handleFulfill}
-                disabled={isLoading}
-                className="bg-purple-600 hover:bg-purple-700"
-              >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Clock className="h-4 w-4 mr-2" />}
-                Mark as Fulfilled
-              </Button>
-            )}
-
-            {contract.status === 'fulfilled' && userRole === 'buyer' && (
-              <Button
-                onClick={handleComplete}
-                disabled={isLoading}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                Complete Contract
-              </Button>
-            )}
-
-            {(contract.status === 'active' || contract.status === 'fulfilled') && (
-              <div className="flex items-center space-x-2">
-                <Label htmlFor={`proof-${contract.id}`} className="sr-only">Upload Proof</Label>
-                <Input
-                  id={`proof-${contract.id}`}
-                  type="file"
-                  onChange={handleUploadProof}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => document.getElementById(`proof-${contract.id}`)?.click()}
-                  disabled={uploadingProof}
-                  variant="outline"
-                >
-                  {uploadingProof ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                  Upload Proof
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+              {(contract.status === 'active' || contract.status === 'fulfilled') && (
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor={`proof-${contract.id}`} className="sr-only">Upload Proof</Label>
+                  <Input
+                    id={`proof-${contract.id}`}
+                    type="file"
+                    onChange={handleUploadProof}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => document.getElementById(`proof-${contract.id}`)?.click()}
+                    disabled={uploadingProof}
+                    variant="outline"
+                  >
+                    {uploadingProof ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                    Upload Proof
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
