@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/lib/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,7 +17,9 @@ import {
   File, 
   Smile,
   Reply,
-  Users
+  Users,
+  CalendarIcon,
+  FileText
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -40,13 +42,23 @@ type AdminSession = Database['public']['Tables']['admin_chat_sessions']['Row'] &
   admin: Database['public']['Tables']['profiles']['Row'];
 };
 
+type Contract = Database['public']['Tables']['contracts']['Row'] & {
+  buyer?: Database['public']['Tables']['profiles']['Row'] | null;
+  seller?: Database['public']['Tables']['profiles']['Row'] | null;
+  buyer_name: string;
+  seller_name: string;
+  buyer_email: string;
+  seller_email: string;
+};
+
 interface EnhancedContractChatProps {
   contractId: string;
+  contract: Contract;
 }
 
 const REACTIONS = ['👍', '👎', '❤️', '😊', '😢', '😮', '😡'];
 
-export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) {
+export function EnhancedContractChat({ contractId, contract }: EnhancedContractChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [adminSessions, setAdminSessions] = useState<AdminSession[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -432,6 +444,18 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
+      case 'active': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
+      case 'fulfilled': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400';
+      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
+      case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
+      case 'disputed': return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
+    }
+  };
+
   const isAdmin = profile?.role === 'admin';
   const activeAdmins = adminSessions.filter(session => session.is_active);
 
@@ -451,243 +475,247 @@ export function EnhancedContractChat({ contractId }: EnhancedContractChatProps) 
   }
 
   return (
-    <Card className="h-[700px] overflow-hidden flex flex-col">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="text-lg">Enhanced Real-time Chat</CardTitle>
-            <p className="text-sm text-gray-500">
-              {isAdmin ? 'Admin participating in contract chat' : 'Chat with contract parties and admin support'}
-            </p>
-          </div>
-          {activeAdmins.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <Users className="h-4 w-4 text-green-600" />
-              <Badge className="bg-green-100 text-green-800">
-                {activeAdmins.length} Admin{activeAdmins.length > 1 ? 's' : ''} Online
-              </Badge>
+    <div className="space-y-6">
+    
+      {/* Chat */}
+      <Card className="h-[700px] overflow-hidden flex flex-col">
+        <CardHeader className="pb-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="text-lg">Enhanced Real-time Chat</CardTitle>
+              <p className="text-sm text-gray-500">
+                {isAdmin ? 'Admin participating in contract chat' : 'Chat with contract parties and admin support'}
+              </p>
             </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col p-0 overflow-y-auto">
-        <ScrollArea className="flex-1 px-4">
-          <div className="space-y-4 pb-4">
-            {messages.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>No messages yet. Start the conversation!</p>
+            {activeAdmins.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Users className="h-4 w-4 text-green-600" />
+                <Badge className="bg-green-100 text-green-800">
+                  {activeAdmins.length} Admin{activeAdmins.length > 1 ? 's' : ''} Online
+                </Badge>
               </div>
-            ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.user_id === user?.id ? 'justify-end' : 'justify-start'
-                  }`}
-                >
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col p-0 overflow-y-auto">
+          <ScrollArea className="flex-1 px-4">
+            <div className="space-y-4 pb-4">
+              {messages.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No messages yet. Start the conversation!</p>
+                </div>
+              ) : (
+                messages.map((message) => (
                   <div
-                    className={`flex items-start space-x-2 max-w-xs lg:max-w-md ${
-                      message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
+                    key={message.id}
+                    className={`flex ${
+                      message.user_id === user?.id ? 'justify-end' : 'justify-start'
                     }`}
                   >
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={message.user.avatar_url || ''} />
-                      <AvatarFallback className="text-xs">
-                        {message.user.full_name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
                     <div
-                      className={`rounded-lg px-3 py-2 ${
-                        message.user_id === user?.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800'
+                      className={`flex items-start space-x-2 max-w-xs lg:max-w-md ${
+                        message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
                       }`}
                     >
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="text-xs font-medium">
-                          {message.user.full_name}
-                        </span>
-                        {message.user.role === 'admin' && (
-                          <Badge className="text-xs bg-red-500 text-white px-1 py-0">
-                            Admin
-                          </Badge>
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={message.user.avatar_url || ''} />
+                        <AvatarFallback className="text-xs">
+                          {message.user.full_name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div
+                        className={`rounded-lg px-3 py-2 ${
+                          message.user_id === user?.id
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 dark:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="text-xs font-medium">
+                            {message.user.full_name}
+                          </span>
+                          {message.user.role === 'admin' && (
+                            <Badge className="text-xs bg-red-500 text-white px-1 py-0">
+                              Admin
+                            </Badge>
+                          )}
+                        </div>
+
+                        {message.reply_to && (
+                          <div className="text-xs opacity-70 mb-2 p-2 bg-black/10 rounded">
+                            <span className="font-medium">{message.reply_to.user?.full_name || 'User'}:</span>
+                            <span className="ml-1">{message.reply_to.message}</span>
+                          </div>
+                        )}
+
+                        {message.file_url && message.file_type === 'image' ? (
+                          <div className="mb-2">
+                            <img 
+                              src={message.file_url} 
+                              alt="Shared image" 
+                              className="max-w-full h-auto rounded cursor-pointer"
+                              onClick={() => window.open(message.file_url!, '_blank')}
+                            />
+                          </div>
+                        ) : message.file_url ? (
+                          <div className="mb-2">
+                            <a
+                              href={message.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs underline flex items-center"
+                            >
+                              <File className="h-3 w-3 mr-1" />
+                              View File
+                            </a>
+                          </div>
+                        ) : null}
+
+                        <p className="text-sm">{message.message}</p>
+
+                        {message.reactions && message.reactions.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {Object.entries(
+                              message.reactions.reduce((acc, reaction) => {
+                                acc[reaction.reaction] = (acc[reaction.reaction] || 0) + 1;
+                                return acc;
+                              }, {} as Record<string, number>)
+                            ).map(([reaction, count]) => (
+                              <button
+                                key={reaction}
+                                onClick={() => {
+                                  const userReacted = message.reactions?.some(
+                                    r => r.reaction === reaction && r.user_id === user?.id
+                                  );
+                                  if (userReacted) {
+                                    removeReaction(message.id, reaction);
+                                  } else {
+                                    addReaction(message.id, reaction);
+                                  }
+                                }}
+                                className="text-xs bg-white/20 rounded px-1 hover:bg-white/30 flex items-center space-x-1"
+                              >
+                                <span>{reaction}</span>
+                                <span>{count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs opacity-70">
+                            {format(new Date(message.created_at), 'HH:mm')}
+                            {message.edited_at && ' (edited)'}
+                          </span>
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => setReplyingTo(message)}
+                              className="text-xs opacity-70 hover:opacity-100"
+                            >
+                              <Reply className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => setShowReactions(
+                                showReactions === message.id ? null : message.id
+                              )}
+                              className="text-xs opacity-70 hover:opacity-100"
+                            >
+                              <Smile className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {showReactions === message.id && (
+                          <div className="flex space-x-1 mt-2 p-2 bg-white/10 rounded">
+                            {REACTIONS.map((reaction) => (
+                              <button
+                                key={reaction}
+                                onClick={() => addReaction(message.id, reaction)}
+                                className="hover:bg-white/20 rounded p-1 text-lg"
+                              >
+                                {reaction}
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
-
-                      {message.reply_to && (
-                        <div className="text-xs opacity-70 mb-2 p-2 bg-black/10 rounded">
-                          <span className="font-medium">{message.reply_to.user?.full_name || 'User'}:</span>
-                          <span className="ml-1">{message.reply_to.message}</span>
-                        </div>
-                      )}
-
-                      {message.file_url && message.file_type === 'image' ? (
-                        <div className="mb-2">
-                          <img 
-                            src={message.file_url} 
-                            alt="Shared image" 
-                            className="max-w-full h-auto rounded cursor-pointer"
-                            onClick={() => window.open(message.file_url!, '_blank')}
-                          />
-                        </div>
-                      ) : message.file_url ? (
-                        <div className="mb-2">
-                          <a
-                            href={message.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs underline flex items-center"
-                          >
-                            <File className="h-3 w-3 mr-1" />
-                            View File
-                          </a>
-                        </div>
-                      ) : null}
-
-                      <p className="text-sm">{message.message}</p>
-
-                      {message.reactions && message.reactions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {Object.entries(
-                            message.reactions.reduce((acc, reaction) => {
-                              acc[reaction.reaction] = (acc[reaction.reaction] || 0) + 1;
-                              return acc;
-                            }, {} as Record<string, number>)
-                          ).map(([reaction, count]) => (
-                            <button
-                              key={reaction}
-                              onClick={() => {
-                                const userReacted = message.reactions?.some(
-                                  r => r.reaction === reaction && r.user_id === user?.id
-                                );
-                                if (userReacted) {
-                                  removeReaction(message.id, reaction);
-                                } else {
-                                  addReaction(message.id, reaction);
-                                }
-                              }}
-                              className="text-xs bg-white/20 rounded px-1 hover:bg-white/30 flex items-center space-x-1"
-                            >
-                              <span>{reaction}</span>
-                              <span>{count}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs opacity-70">
-                          {format(new Date(message.created_at), 'HH:mm')}
-                          {message.edited_at && ' (edited)'}
-                        </span>
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => setReplyingTo(message)}
-                            className="text-xs opacity-70 hover:opacity-100"
-                          >
-                            <Reply className="h-3 w-3" />
-                          </button>
-                          <button
-                            onClick={() => setShowReactions(
-                              showReactions === message.id ? null : message.id
-                            )}
-                            className="text-xs opacity-70 hover:opacity-100"
-                          >
-                            <Smile className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {showReactions === message.id && (
-                        <div className="flex space-x-1 mt-2 p-2 bg-white/10 rounded">
-                          {REACTIONS.map((reaction) => (
-                            <button
-                              key={reaction}
-                              onClick={() => addReaction(message.id, reaction)}
-                              className="hover:bg-white/20 rounded p-1 text-lg"
-                            >
-                              {reaction}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-        
-        <div className="border-t p-4">
-          {replyingTo && (
-            <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm">
-              <div className="flex justify-between items-center">
-                <span>
-                  Replying to <strong>{replyingTo.user.full_name}</strong>: {replyingTo.message}
-                </span>
-                <button onClick={() => setReplyingTo(null)} className="text-gray-500">
-                  ×
-                </button>
-              </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
             </div>
-          )}
+          </ScrollArea>
           
-          <div className="flex items-center space-x-2">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
-              disabled={sending}
-              className="flex-1"
-            />
+          <div className="border-t p-4">
+            {replyingTo && (
+              <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm">
+                <div className="flex justify-between items-center">
+                  <span>
+                    Replying to <strong>{replyingTo.user.full_name}</strong>: {replyingTo.message}
+                  </span>
+                  <button onClick={() => setReplyingTo(null)} className="text-gray-500">
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
             
-            <input
-              ref={imageInputRef}
-              type="file"
-              onChange={(e) => handleFileUpload(e, 'image')}
-              className="hidden"
-              accept="image/*"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={uploading}
-              title="Share Image"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a message..."
+                disabled={sending}
+                className="flex-1"
+              />
+              
+              <input
+                ref={imageInputRef}
+                type="file"
+                onChange={(e) => handleFileUpload(e, 'image')}
+                className="hidden"
+                accept="image/*"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
+                title="Share Image"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </Button>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={(e) => handleFileUpload(e, 'document')}
-              className="hidden"
-              accept=".pdf,.doc,.docx,.txt"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              title="Share File"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={(e) => handleFileUpload(e, 'document')}
+                className="hidden"
+                accept=".pdf,.doc,.docx,.txt"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                title="Share File"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
 
-            <Button
-              onClick={sendMessage}
-              disabled={sending || !newMessage.trim()}
-              size="icon"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+              <Button
+                onClick={sendMessage}
+                disabled={sending || !newMessage.trim()}
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

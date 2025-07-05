@@ -225,7 +225,10 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
 
         <div className="space-y-2">
           <h4 className="text-sm font-medium">Terms & Conditions</h4>
-          <p className="text-sm border p-3 rounded-lg">{contract.terms}</p>
+          <div 
+            className="text-sm border p-3 rounded-lg prose prose-sm max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: contract.terms }}
+          />
         </div>
 
         {contract.file_url && (

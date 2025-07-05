@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, FileText, MessageSquare, Upload } from 'lucide-react';
+import { CalendarIcon, FileText, MessageSquare, Upload, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { EnhancedContractChat } from './enhanced-contract-chat';
 import { ContractProofs } from './contract-proofs';
@@ -32,13 +32,143 @@ interface ContractDetailsProps {
 export function ContractDetails({ contractId }: ContractDetailsProps) {
   const [contract, setContract] = useState<ContractWithNames | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadProofs, setUnreadProofs] = useState(0);
+  const [activeTab, setActiveTab] = useState('details');
   const { user, profile } = useAuth();
 
   useEffect(() => {
-    if (contractId) {
+    if (contractId && user) {
       fetchContract();
+      initializeUnreadCounts();
+      setupRealtimeSubscriptions();
     }
-  }, [contractId]);
+  }, [contractId, user]);
+
+  // Reset unread counts when switching tabs
+  useEffect(() => {
+    if (activeTab === 'chat' && unreadMessages > 0) {
+      setUnreadMessages(0);
+      updateLastViewedTimestamp('messages');
+    } else if (activeTab === 'proofs' && unreadProofs > 0) {
+      setUnreadProofs(0);
+      updateLastViewedTimestamp('proofs');
+    }
+  }, [activeTab, unreadMessages, unreadProofs]);
+
+  const getStorageKey = (type: 'messages' | 'proofs') => {
+    return `lastViewed_${type}_${contractId}_${user?.id}`;
+  };
+
+  const updateLastViewedTimestamp = (type: 'messages' | 'proofs') => {
+    if (!user) return;
+    const timestamp = new Date().toISOString();
+    localStorage.setItem(getStorageKey(type), timestamp);
+  };
+
+  const getLastViewedTimestamp = (type: 'messages' | 'proofs'): Date | null => {
+    if (!user) return null;
+    const timestamp = localStorage.getItem(getStorageKey(type));
+    return timestamp ? new Date(timestamp) : null;
+  };
+
+  const initializeUnreadCounts = async () => {
+    if (!user || !contractId) return;
+
+    try {
+      const lastMessageView = getLastViewedTimestamp('messages');
+      const lastProofView = getLastViewedTimestamp('proofs');
+
+      // Count unread messages
+      let messageQuery = supabase
+        .from('contract_messages')
+        .select('id, created_at, user_id')
+        .eq('contract_id', contractId)
+        .neq('user_id', user.id);
+
+      if (lastMessageView) {
+        messageQuery = messageQuery.gt('created_at', lastMessageView.toISOString());
+      }
+
+      const { data: messagesData, error: messagesError } = await messageQuery;
+
+      if (!messagesError && messagesData) {
+        setUnreadMessages(messagesData.length);
+      }
+
+      // Count unread proofs
+      let proofQuery = supabase
+        .from('contract_proofs')
+        .select('id, created_at, uploaded_by')
+        .eq('contract_id', contractId)
+        .neq('uploaded_by', user.id);
+
+      if (lastProofView) {
+        proofQuery = proofQuery.gt('created_at', lastProofView.toISOString());
+      }
+
+      const { data: proofsData, error: proofsError } = await proofQuery;
+
+      if (!proofsError && proofsData) {
+        setUnreadProofs(proofsData.length);
+      }
+    } catch (error) {
+      console.error('Error initializing unread counts:', error);
+    }
+  };
+
+  const setupRealtimeSubscriptions = () => {
+    if (!user || !contractId) return;
+
+    const channel = supabase.channel(`contract-unread-${contractId}-${user.id}`, {
+      config: {
+        broadcast: { self: false },
+      }
+    });
+
+    // Subscribe to new messages
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'contract_messages',
+          filter: `contract_id=eq.${contractId}`,
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          // Only count if it's not from the current user and not on chat tab
+          if (payload.new.user_id !== user.id && activeTab !== 'chat') {
+            setUnreadMessages(prev => prev + 1);
+          }
+        }
+      )
+      // Subscribe to new proofs
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'contract_proofs',
+          filter: `contract_id=eq.${contractId}`,
+        },
+        (payload) => {
+          console.log('New proof received:', payload);
+          // Only count if it's not from the current user and not on proofs tab
+          if (payload.new.uploaded_by !== user.id && activeTab !== 'proofs') {
+            setUnreadProofs(prev => prev + 1);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Unread subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
 
   const fetchContract = async () => {
     try {
@@ -144,132 +274,216 @@ export function ContractDetails({ contractId }: ContractDetailsProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6 lg:flex items-start gap-4">
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Contract Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle className="text-2xl">{contract.title}</CardTitle>
-              <CardDescription className="mt-2">{contract.description}</CardDescription>
-              {profile?.role === 'admin' && (
-                <div className="mt-2">
-                  <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">
-                    Admin View
-                  </Badge>
-                </div>
-              )}
-            </div>
-            <Badge className={getStatusColor(contract.status)}>
-              {contract.status.toUpperCase()}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Buyer Info */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100">Buyer</h4>
-              <div className="flex items-center space-x-3">
-                <Avatar>
-                  <AvatarImage src={contract.buyer?.avatar_url || ''} />
-                  <AvatarFallback>{contract.buyer_name.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{contract.buyer_name}</p>
-                  <p className="text-sm text-gray-500">{contract.buyer_email}</p>
-                  {contract.buyer?.role === 'admin' && (
-                    <Badge className="text-xs bg-red-500 text-white">Admin</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Seller Info */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100">Seller</h4>
-              <div className="flex items-center space-x-3">
-                <Avatar>
-                  <AvatarImage src={contract.seller?.avatar_url || ''} />
-                  <AvatarFallback>{contract.seller_name.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{contract.seller_name}</p>
-                  <p className="text-sm text-gray-500">{contract.seller_email}</p>
-                  {contract.seller?.role === 'admin' && (
-                    <Badge className="text-xs bg-red-500 text-white">Admin</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Contract Info */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100">Contract Details</h4>
-              <div className="space-y-2">
-                <div className="flex items-center text-sm">
-                  <CalendarIcon className="h-4 w-4 mr-2 text-gray-400" />
-                  <span>Deadline: {format(new Date(contract.deadline), 'PPP')}</span>
-                </div>
-                <div className="flex items-center text-sm">
-                  <FileText className="h-4 w-4 mr-2 text-gray-400" />
-                  <span>Created: {format(new Date(contract.created_at), 'PPP')}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Your Role: </span>
-                  <Badge variant="outline" className="capitalize">
-                    {userRole}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Terms */}
-          <div className="mt-6">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Terms & Conditions</h4>
-            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-              <p className="text-sm whitespace-pre-wrap">{contract.terms}</p>
-            </div>
-          </div>
-
-          {/* Attachment */}
-          {contract.file_url && (
-            <div className="mt-6">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Attachment</h4>
-              <a
-                href={contract.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline flex items-center"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                View Contract Attachment
-              </a>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tabs for Chat and Proofs */}
-      <Tabs defaultValue="chat" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="chat" className="flex items-center space-x-2">
+     
+      {/* Tabs for Details, Chat and Proofs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="details" className="flex items-center space-x-2">
+            <Info className="h-4 w-4" />
+            <span>Contract Details</span>
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="flex items-center space-x-2 relative">
             <MessageSquare className="h-4 w-4" />
             <span>Enhanced Real-time Chat</span>
+            {unreadMessages > 0 && (
+              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center min-w-[20px] z-10">
+                {unreadMessages > 99 ? '99+' : unreadMessages}
+              </div>
+            )}
           </TabsTrigger>
-          <TabsTrigger value="proofs" className="flex items-center space-x-2">
+          <TabsTrigger value="proofs" className="flex items-center space-x-2 relative">
             <Upload className="h-4 w-4" />
             <span>Proofs {profile?.role === 'admin' ? '(Admin View)' : ''}</span>
+            {unreadProofs > 0 && (
+              <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center min-w-[20px] z-10">
+                {unreadProofs > 99 ? '99+' : unreadProofs}
+              </div>
+            )}
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="details" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Complete Contract Information</CardTitle>
+              <CardDescription>
+                All details about this contract including parties, terms, and timeline
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Contract Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Contract Information</h5>
+                    <div className="space-y-2 text-sm">
+                      <div><span className="font-medium">Title:</span> {contract.title}</div>
+                      <div><span className="font-medium">Status:</span> 
+                        <Badge className={`ml-2 ${getStatusColor(contract.status)}`}>
+                          {contract.status.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div><span className="font-medium">Created:</span> {format(new Date(contract.created_at), 'PPP')}</div>
+                      <div><span className="font-medium">Deadline:</span> {format(new Date(contract.deadline), 'PPP')}</div>
+                      <div><span className="font-medium">Last Updated:</span> {format(new Date(contract.updated_at), 'PPP')}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Your Role</h5>
+                    <div className="space-y-2 text-sm">
+                      <div><span className="font-medium">Role:</span> 
+                        <Badge variant="outline" className="ml-2 capitalize">
+                          {userRole}
+                        </Badge>
+                      </div>
+                      {userRole === 'buyer' && (
+                        <div><span className="font-medium">Counterparty:</span> {contract.seller_name} (Seller)</div>
+                      )}
+                      {userRole === 'seller' && (
+                        <div><span className="font-medium">Counterparty:</span> {contract.buyer_name} (Buyer)</div>
+                      )}
+                      {userRole === 'admin' && (
+                        <div className="text-red-600"><span className="font-medium">Admin Access:</span> Full contract oversight</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parties Details */}
+              <div>
+                <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Contract Parties</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Buyer Details */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Buyer</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center space-x-3 mb-3">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={contract.buyer?.avatar_url || ''} />
+                          <AvatarFallback>{contract.buyer_name.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{contract.buyer_name}</p>
+                          <p className="text-sm text-gray-500">{contract.buyer_email}</p>
+                          {contract.buyer?.role === 'admin' && (
+                            <Badge className="text-xs bg-red-500 text-white mt-1">Admin</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <p><span className="font-medium">Role:</span> Contract Buyer</p>
+                        <p><span className="font-medium">Responsibilities:</span> Review terms, make payments, confirm delivery</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Seller Details */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Seller</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center space-x-3 mb-3">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={contract.seller?.avatar_url || ''} />
+                          <AvatarFallback>{contract.seller_name.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{contract.seller_name}</p>
+                          <p className="text-sm text-gray-500">{contract.seller_email}</p>
+                          {contract.seller?.role === 'admin' && (
+                            <Badge className="text-xs bg-red-500 text-white mt-1">Admin</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <p><span className="font-medium">Role:</span> Contract Seller</p>
+                        <p><span className="font-medium">Responsibilities:</span> Deliver goods/services, provide proof, fulfill terms</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Description</h5>
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                  <p className="text-sm">{contract.description}</p>
+                </div>
+              </div>
+
+              {/* Terms & Conditions */}
+              <div>
+                <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Terms & Conditions</h5>
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                  <div 
+                    className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: contract.terms }}
+                  />
+                </div>
+              </div>
+
+              {/* Attachment */}
+              {contract.file_url && (
+                <div>
+                  <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Contract Attachment</h5>
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <a
+                      href={contract.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center"
+                    >
+                      <FileText className="h-5 w-5 mr-2" />
+                      View Contract Attachment
+                    </a>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Click to view the attached contract document
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline */}
+              <div>
+                <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Contract Timeline</h5>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3 text-sm">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="font-medium">Created:</span>
+                    <span>{format(new Date(contract.created_at), 'PPP')}</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-sm">
+                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                    <span className="font-medium">Deadline:</span>
+                    <span>{format(new Date(contract.deadline), 'PPP')}</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-sm">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <span className="font-medium">Last Updated:</span>
+                    <span>{format(new Date(contract.updated_at), 'PPP')}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="chat" className="mt-6">
-          <EnhancedContractChat contractId={contractId} />
+          <EnhancedContractChat contractId={contractId} contract={contract} />
         </TabsContent>
 
         <TabsContent value="proofs" className="mt-6">
-          <ContractProofs contractId={contractId} />
+          <ContractProofs contractId={contractId} contract={contract} />
         </TabsContent>
       </Tabs>
     </div>
