@@ -31,7 +31,7 @@ export type JobFormData = {
   category_id: string;
   description: string;
   pricing_type: 'hourly' | 'fixed' | 'package';
-  base_price?: number;
+  base_price: number;
   hourly_rate?: number;
   delivery_time?: number;
   revisions_included: number;

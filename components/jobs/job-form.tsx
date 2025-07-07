@@ -51,13 +51,13 @@ const DAYS_OF_WEEK = [
 ];
 
 export function JobForm() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<JobCategory[]>([]);
   const [previewMode, setPreviewMode] = useState(false);
   const [currentTab, setCurrentTab] = useState('basic');
   const { user, profile } = useAuth();
-  const router = useRouter();
 
   const [formData, setFormData] = useState<JobFormData>({
     title: '',
@@ -65,7 +65,7 @@ export function JobForm() {
     description: '',
     pricing_type: 'fixed',
     base_price: 0,
-    hourly_rate: 0,
+    hourly_rate: undefined,
     delivery_time: 7,
     revisions_included: 2,
     requirements: '',
@@ -277,6 +277,8 @@ export function JobForm() {
     setError(null);
 
     try {
+      console.log('Creating job with data:', formData);
+      
       // Create the job
       const { data: job, error: jobError } = await supabase
         .from('jobs')
@@ -302,6 +304,8 @@ export function JobForm() {
       if (jobError) throw jobError;
 
       // Add skills
+      console.log('Job created successfully:', job);
+      
       if (formData.skills.length > 0) {
         const skillsData = formData.skills.map(skill => ({
           job_id: job.id,
@@ -316,6 +320,7 @@ export function JobForm() {
       }
 
       // Add portfolio items
+      console.log('Skills added successfully');
       if (formData.portfolio_items.length > 0) {
         const portfolioData = formData.portfolio_items
           .filter(item => item.title.trim())
@@ -339,6 +344,7 @@ export function JobForm() {
       }
 
       // Add packages (if package pricing)
+      console.log('Portfolio items added successfully');
       if (formData.pricing_type === 'package' && formData.packages.length > 0) {
         const packagesData = formData.packages
           .filter(pkg => pkg.name.trim() && pkg.description.trim())
@@ -363,6 +369,8 @@ export function JobForm() {
         }
       }
 
+      console.log('All job data created successfully');
+      
       toast.success(isDraft ? 'Job saved as draft!' : 'Job created successfully!');
       router.push('/dashboard');
     } catch (err: any) {
@@ -443,7 +451,6 @@ export function JobForm() {
       </div>
     );
   }
-
   return (
     <div className="max-w-4xl mx-auto p-6">
       <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
