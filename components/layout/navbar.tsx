@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Shield, User, LogOut, Plus, LayoutDashboard, Settings } from 'lucide-react';
+import { Briefcase, User, LogOut, Plus, LayoutDashboard, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -39,20 +39,20 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link href="/dashboard" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
             <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-md">
-              <Shield className="h-6 w-6 text-white" />
+              <Briefcase className="h-6 w-6 text-white" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              DealVault
+              GigHub
             </span>
           </Link>
 
           <div className="flex items-center space-x-4">
             <ThemeToggle />
             
-            <Link href="/contracts/new">
+            <Link href="/jobs/new">
               <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all duration-200">
                 <Plus className="h-4 w-4 mr-2" />
-                New Contract
+                New Gig
               </Button>
             </Link>
 

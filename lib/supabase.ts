@@ -18,6 +18,266 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 export type Database = {
   public: {
     Tables: {
+      job_categories: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          icon: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          icon?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          icon?: string | null;
+          created_at?: string;
+        };
+      };
+      jobs: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          category_id: string | null;
+          description: string;
+          pricing_type: 'hourly' | 'fixed' | 'package';
+          base_price: number | null;
+          hourly_rate: number | null;
+          delivery_time: number | null;
+          revisions_included: number;
+          requirements: string | null;
+          terms_conditions: string | null;
+          status: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled';
+          featured: boolean;
+          views_count: number;
+          applications_count: number;
+          rating: number;
+          reviews_count: number;
+          availability_hours: any | null;
+          response_time: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          category_id?: string | null;
+          description: string;
+          pricing_type: 'hourly' | 'fixed' | 'package';
+          base_price?: number | null;
+          hourly_rate?: number | null;
+          delivery_time?: number | null;
+          revisions_included?: number;
+          requirements?: string | null;
+          terms_conditions?: string | null;
+          status?: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled';
+          featured?: boolean;
+          views_count?: number;
+          applications_count?: number;
+          rating?: number;
+          reviews_count?: number;
+          availability_hours?: any | null;
+          response_time?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          category_id?: string | null;
+          description?: string;
+          pricing_type?: 'hourly' | 'fixed' | 'package';
+          base_price?: number | null;
+          hourly_rate?: number | null;
+          delivery_time?: number | null;
+          revisions_included?: number;
+          requirements?: string | null;
+          terms_conditions?: string | null;
+          status?: 'draft' | 'active' | 'paused' | 'completed' | 'cancelled';
+          featured?: boolean;
+          views_count?: number;
+          applications_count?: number;
+          rating?: number;
+          reviews_count?: number;
+          availability_hours?: any | null;
+          response_time?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      job_skills: {
+        Row: {
+          id: string;
+          job_id: string;
+          skill_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          skill_name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          skill_name?: string;
+          created_at?: string;
+        };
+      };
+      job_portfolio_items: {
+        Row: {
+          id: string;
+          job_id: string;
+          title: string;
+          description: string | null;
+          image_url: string | null;
+          file_url: string | null;
+          file_type: 'image' | 'video' | 'document' | 'link' | null;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          title: string;
+          description?: string | null;
+          image_url?: string | null;
+          file_url?: string | null;
+          file_type?: 'image' | 'video' | 'document' | 'link' | null;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          title?: string;
+          description?: string | null;
+          image_url?: string | null;
+          file_url?: string | null;
+          file_type?: 'image' | 'video' | 'document' | 'link' | null;
+          order_index?: number;
+          created_at?: string;
+        };
+      };
+      job_packages: {
+        Row: {
+          id: string;
+          job_id: string;
+          name: string;
+          description: string;
+          price: number;
+          delivery_time: number;
+          revisions_included: number;
+          features: any | null;
+          is_popular: boolean;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          name: string;
+          description: string;
+          price: number;
+          delivery_time: number;
+          revisions_included?: number;
+          features?: any | null;
+          is_popular?: boolean;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          name?: string;
+          description?: string;
+          price?: number;
+          delivery_time?: number;
+          revisions_included?: number;
+          features?: any | null;
+          is_popular?: boolean;
+          order_index?: number;
+          created_at?: string;
+        };
+      };
+      job_applications: {
+        Row: {
+          id: string;
+          job_id: string;
+          applicant_id: string;
+          package_id: string | null;
+          message: string;
+          budget: number | null;
+          timeline: string | null;
+          status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          applicant_id: string;
+          package_id?: string | null;
+          message: string;
+          budget?: number | null;
+          timeline?: string | null;
+          status?: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          applicant_id?: string;
+          package_id?: string | null;
+          message?: string;
+          budget?: number | null;
+          timeline?: string | null;
+          status?: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      job_reviews: {
+        Row: {
+          id: string;
+          job_id: string;
+          application_id: string;
+          reviewer_id: string;
+          rating: number;
+          review_text: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          application_id: string;
+          reviewer_id: string;
+          rating: number;
+          review_text?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          application_id?: string;
+          reviewer_id?: string;
+          rating?: number;
+          review_text?: string | null;
+          created_at?: string;
+        };
+      };
       profiles: {
         Row: {
           id: string;
