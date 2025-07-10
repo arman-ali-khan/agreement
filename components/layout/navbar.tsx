@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { NotificationDropdown } from '@/components/layout/notification-dropdown';
+import { MessagesDropdown } from '@/components/layout/messages-dropdown';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,12 +44,21 @@ export function Navbar() {
               <Briefcase className="h-6 w-6 text-white" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              GigHub
+              DealVault
             </span>
           </Link>
 
           <div className="flex items-center space-x-4">
             <ThemeToggle />
+            
+            <NotificationDropdown />
+            <MessagesDropdown />
+            
+            <Link href="/">
+              <Button variant="ghost" className="hidden sm:inline-flex">
+                Browse Gigs
+              </Button>
+            </Link>
             
             <Link href="/jobs/new">
               <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-all duration-200">

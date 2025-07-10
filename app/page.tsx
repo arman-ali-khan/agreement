@@ -1,24 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { GigsHomePage } from '@/components/home/gigs-home-page';
 import { LandingPage } from '@/components/landing/landing-page';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Briefcase, CheckCircle, FileText, Users, Lock, Zap, Star, Search } from 'lucide-react';
-import Link from 'next/link';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    if (user && !loading) {
-      router.push('/dashboard');
-    }
-  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -28,9 +18,11 @@ export default function HomePage() {
     );
   }
 
+  // Show gigs marketplace for both authenticated and non-authenticated users
   if (user) {
-    return null; // Will redirect to dashboard
+    return <GigsHomePage />;
   }
 
+  // Show landing page for non-authenticated users
   return <LandingPage />;
 }
