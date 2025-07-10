@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Briefcase, User, LogOut, Plus, LayoutDashboard, Settings } from 'lucide-react';
+import { Briefcase, User, LogOut, Plus, LayoutDashboard, Settings, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -99,6 +99,12 @@ export function Navbar() {
                   <Link href="/profile" className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
                     Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/jobs/applications" className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" />
+                    My Applications
                   </Link>
                 </DropdownMenuItem>
                 {profile?.role === 'admin' && (

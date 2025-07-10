@@ -10,12 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 export function JobsTab() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (user) {
@@ -132,6 +134,13 @@ export function JobsTab() {
             className="pl-10"
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={() => router.push('/jobs/applications')}
+          className="whitespace-nowrap"
+        >
+          View My Applications
+        </Button>
       </div>
 
       {/* Jobs Content */}

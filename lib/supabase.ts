@@ -517,6 +517,38 @@ export type Database = {
           is_active?: boolean;
         };
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: 'gig_application' | 'message' | 'contract_update' | 'proof_uploaded' | 'review_received';
+          title: string;
+          message: string;
+          data: any | null;
+          read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          type: 'gig_application' | 'message' | 'contract_update' | 'proof_uploaded' | 'review_received';
+          title: string;
+          message: string;
+          data?: any | null;
+          read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          type?: 'gig_application' | 'message' | 'contract_update' | 'proof_uploaded' | 'review_received';
+          title?: string;
+          message?: string;
+          data?: any | null;
+          read?: boolean;
+          created_at?: string;
+        };
+      };
     };
   };
 };

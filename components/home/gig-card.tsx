@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { 
   Star, 
   Clock, 
@@ -27,7 +30,8 @@ import {
   Share2,
   CheckCircle,
   DollarSign,
-  Loader2
+  Loader2,
+  Package
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -43,6 +47,9 @@ interface GigCardProps {
 export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) {
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
+  const [selectedPackage, setSelectedPackage] = useState<string>('');
+  const [customBudget, setCustomBudget] = useState<string>('');
+  const [customTimeline, setCustomTimeline] = useState<string>('');
   const [isApplying, setIsApplying] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const { user, profile } = useAuth();
@@ -63,6 +70,38 @@ export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) 
     return 'Contact for pricing';
   };
 
+  const getSelectedPackageDetails = () => {
+    if (!selectedPackage || gig.pricing_type !== 'package') return null;
+    return gig.packages.find((pkg: any) => pkg.id === selectedPackage);
+  };
+
+  const getApplicationPrice = () => {
+    const packageDetails = getSelectedPackageDetails();
+    if (packageDetails) {
+      return packageDetails.price;
+    }
+    if (customBudget) {
+      return parseFloat(customBudget);
+    }
+    if (gig.pricing_type === 'fixed' && gig.base_price) {
+      return gig.base_price;
+    }
+    return null;
+  };
+
+  const getApplicationTimeline = () => {
+    const packageDetails = getSelectedPackageDetails();
+    if (packageDetails) {
+      return `${packageDetails.delivery_time} days`;
+    }
+    if (customTimeline) {
+      return customTimeline;
+    }
+    if (gig.delivery_time) {
+      return `${gig.delivery_time} days`;
+    }
+    return null;
+  };
   const handleApply = async () => {
     if (!user) {
       toast.error('Please sign in to apply for gigs');
@@ -74,15 +113,31 @@ export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) 
       return;
     }
 
+    // Validate package selection for package-based gigs
+    if (gig.pricing_type === 'package' && !selectedPackage) {
+      toast.error('Please select a package for your application');
+      return;
+    }
+
+    // Validate custom budget for non-package gigs
+    if (gig.pricing_type !== 'package' && !customBudget && !gig.base_price) {
+      toast.error('Please enter your budget for this project');
+      return;
+    }
     setIsApplying(true);
     try {
+      const applicationData = {
+        job_id: gig.id,
+        applicant_id: user.id,
+        message: applicationMessage.trim(),
+        package_id: selectedPackage || null,
+        budget: getApplicationPrice(),
+        timeline: getApplicationTimeline()
+      };
+
       const { error } = await supabase
         .from('job_applications')
-        .insert({
-          job_id: gig.id,
-          applicant_id: user.id,
-          message: applicationMessage.trim()
-        });
+        .insert(applicationData);
 
       if (error) {
         if (error.code === '23505') {
@@ -91,9 +146,36 @@ export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) 
           throw error;
         }
       } else {
+        // Create a message to the gig owner
+        const packageDetails = getSelectedPackageDetails();
+        const messageContent = `New application for "${gig.title}"
+
+${applicationMessage.trim()}
+
+Application Details:
+- Budget: $${getApplicationPrice()}
+- Timeline: ${getApplicationTimeline()}
+${packageDetails ? `- Package: ${packageDetails.name}` : ''}
+
+You can view and respond to this application in your dashboard.`;
+
+        await supabase
+          .from('user_messages')
+          .insert({
+            sender_id: user.id,
+            recipient_id: gig.user_id,
+            subject: `New Application: ${gig.title}`,
+            message: messageContent,
+            message_type: 'gig_related',
+            related_job_id: gig.id
+          });
+
         toast.success('Application submitted successfully!');
         setShowApplicationModal(false);
         setApplicationMessage('');
+        setSelectedPackage('');
+        setCustomBudget('');
+        setCustomTimeline('');
       }
     } catch (error) {
       console.error('Error applying to gig:', error);
@@ -289,17 +371,177 @@ export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) 
                   </DialogHeader>
                   
                   <div className="space-y-4">
+                    {/* Package Selection for Package-based Gigs */}
+                    {gig.pricing_type === 'package' && gig.packages.length > 0 && (
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-base font-medium">Select a Package</Label>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Choose the package that best fits your needs
+                          </p>
+                        </div>
+                        
+                        <div className="grid gap-3">
+                          {gig.packages.map((pkg: any) => (
+                            <div
+                              key={pkg.id}
+                              className={cn(
+                                "border rounded-lg p-4 cursor-pointer transition-all",
+                                selectedPackage === pkg.id
+                                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                              )}
+                              onClick={() => setSelectedPackage(pkg.id)}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <h4 className="font-medium">{pkg.name}</h4>
+                                    {pkg.is_popular && (
+                                      <Badge className="bg-orange-500 text-white text-xs">
+                                        Popular
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                    {pkg.description}
+                                  </p>
+                                  <div className="flex items-center space-x-4 text-sm">
+                                    <div className="flex items-center space-x-1">
+                                      <DollarSign className="h-4 w-4 text-green-600" />
+                                      <span className="font-medium">${pkg.price}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <Clock className="h-4 w-4 text-blue-600" />
+                                      <span>{pkg.delivery_time} days</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <CheckCircle className="h-4 w-4 text-purple-600" />
+                                      <span>{pkg.revisions_included} revisions</span>
+                                    </div>
+                                  </div>
+                                  {pkg.features && pkg.features.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        What's included:
+                                      </p>
+                                      <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                        {pkg.features.slice(0, 3).map((feature: string, index: number) => (
+                                          <li key={index} className="flex items-center space-x-1">
+                                            <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                            <span>{feature}</span>
+                                          </li>
+                                        ))}
+                                        {pkg.features.length > 3 && (
+                                          <li className="text-gray-500">
+                                            +{pkg.features.length - 3} more features
+                                          </li>
+                                        )}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="ml-4">
+                                  <div className={cn(
+                                    "w-4 h-4 rounded-full border-2 transition-all",
+                                    selectedPackage === pkg.id
+                                      ? "border-blue-500 bg-blue-500"
+                                      : "border-gray-300 dark:border-gray-600"
+                                  )}>
+                                    {selectedPackage === pkg.id && (
+                                      <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Custom Budget and Timeline for Non-Package Gigs */}
+                    {gig.pricing_type !== 'package' && (
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-base font-medium">Your Proposal</Label>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Provide your budget and timeline for this project
+                          </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="budget">Your Budget ($)</Label>
+                            <Input
+                              id="budget"
+                              type="number"
+                              value={customBudget}
+                              onChange={(e) => setCustomBudget(e.target.value)}
+                              placeholder={gig.base_price ? gig.base_price.toString() : "Enter amount"}
+                              min="1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="timeline">Timeline</Label>
+                            <Input
+                              id="timeline"
+                              value={customTimeline}
+                              onChange={(e) => setCustomTimeline(e.target.value)}
+                              placeholder={gig.delivery_time ? `${gig.delivery_time} days` : "e.g., 7 days"}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <Separator />
+
                     <div>
-                      <Label htmlFor="message">Your Message</Label>
+                      <Label htmlFor="message" className="text-base font-medium">
+                        Your Message
+                      </Label>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        Introduce yourself and explain why you're the right fit for this project
+                      </p>
                       <Textarea
                         id="message"
                         value={applicationMessage}
                         onChange={(e) => setApplicationMessage(e.target.value)}
-                        placeholder="Hi! I'm interested in your gig because..."
-                        rows={4}
-                        className="mt-1"
+                        placeholder="Hi! I'm interested in your gig because...
+
+Here's what I can offer:
+- [Your relevant experience]
+- [Why you're the right fit]
+- [Any questions about the project]"
+                        rows={6}
                       />
                     </div>
+
+                    {/* Application Summary */}
+                    {(selectedPackage || customBudget) && (
+                      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Application Summary</h4>
+                        <div className="space-y-2 text-sm">
+                          {getSelectedPackageDetails() && (
+                            <div className="flex justify-between">
+                              <span>Package:</span>
+                              <span className="font-medium">{getSelectedPackageDetails()?.name}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span>Budget:</span>
+                            <span className="font-medium text-green-600">
+                              ${getApplicationPrice()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Timeline:</span>
+                            <span className="font-medium">{getApplicationTimeline()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex justify-end space-x-2">
                       <Button
@@ -310,7 +552,12 @@ export function GigCard({ gig, featured = false, isNew = false }: GigCardProps) 
                       </Button>
                       <Button
                         onClick={handleApply}
-                        disabled={isApplying || !applicationMessage.trim()}
+                        disabled={
+                          isApplying || 
+                          !applicationMessage.trim() ||
+                          (gig.pricing_type === 'package' && !selectedPackage) ||
+                          (gig.pricing_type !== 'package' && !customBudget && !gig.base_price)
+                        }
                       >
                         {isApplying ? (
                           <>
