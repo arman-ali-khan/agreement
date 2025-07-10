@@ -17,7 +17,9 @@ import {
   User,
   Upload,
   Loader2,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -39,6 +41,7 @@ interface ContractCardProps {
 export function ContractCard({ contract, onUpdate }: ContractCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [showFullTerms, setShowFullTerms] = useState(false);
   const { user, profile } = useAuth();
 
   const isUserInvolved = user && (contract.buyer_id === user.id || contract.seller_id === user.id);
@@ -187,6 +190,25 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
 
   const otherParty = userRole === 'buyer' ? contract.seller : contract.buyer;
 
+  // Helper function to truncate terms text
+  const truncateTerms = (html: string, maxLength: number = 200) => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+    
+    if (textContent.length <= maxLength) {
+      return { truncated: html, needsToggle: false };
+    }
+    
+    const truncatedText = textContent.substring(0, maxLength) + '...';
+    return { 
+      truncated: `<p>${truncatedText}</p>`, 
+      needsToggle: true 
+    };
+  };
+
+  const { truncated: truncatedTerms, needsToggle } = truncateTerms(contract.terms);
+
   return (
     <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
       <CardHeader>
@@ -225,10 +247,31 @@ export function ContractCard({ contract, onUpdate }: ContractCardProps) {
 
         <div className="space-y-2">
           <h4 className="text-sm font-medium">Terms & Conditions</h4>
-          <div 
-            className="text-sm border p-3 rounded-lg prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: contract.terms }}
-          />
+          <div className="text-sm border p-3 rounded-lg prose prose-sm max-w-none dark:prose-invert">
+            <div 
+              dangerouslySetInnerHTML={{ 
+                __html: showFullTerms ? contract.terms : truncatedTerms 
+              }} 
+            />
+            {needsToggle && (
+              <button
+                onClick={() => setShowFullTerms(!showFullTerms)}
+                className="inline-flex items-center mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+              >
+                {showFullTerms ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-1" />
+                    See less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                    See more
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         {contract.file_url && (

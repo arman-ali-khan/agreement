@@ -137,6 +137,14 @@ export function JobCard({ job, onStatusChange, onDelete }: JobCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {job.status === 'draft' && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              This gig is saved as a draft. Complete all required fields and publish to make it visible to clients.
+            </p>
+          </div>
+        )}
+        
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">

@@ -240,9 +240,8 @@ export function JobForm() {
     
     if (!formData.title.trim()) errors.push('Title is required');
     if (formData.title.length > 80) errors.push('Title must be 80 characters or less');
-    if (!formData.category_id) errors.push('Category is required');
     if (!formData.description.trim()) errors.push('Description is required');
-    if (formData.description.length < 100) errors.push('Description must be at least 100 characters');
+    if (formData.description.length < 50) errors.push('Description must be at least 50 characters');
     
     if (formData.pricing_type === 'hourly' && (!formData.hourly_rate || formData.hourly_rate <= 0)) {
       errors.push('Hourly rate is required for hourly pricing');
@@ -259,7 +258,6 @@ export function JobForm() {
     }
     
     if (formData.skills.length === 0) errors.push('At least one skill is required');
-    if (!formData.terms_conditions.trim()) errors.push('Terms & conditions are required');
     
     return errors;
   };
@@ -267,6 +265,7 @@ export function JobForm() {
   const handleSubmit = async (isDraft: boolean = false) => {
     if (!user) return;
 
+    // Only validate if publishing (not draft)
     const errors = isDraft ? [] : validateForm();
     if (errors.length > 0) {
       setError(errors.join(', '));
@@ -295,7 +294,7 @@ export function JobForm() {
           requirements: formData.requirements,
           terms_conditions: formData.terms_conditions,
           availability_hours: formData.availability_hours,
-          response_time: formData.response_time,
+          response_time: formData.response_time || 'within 24 hours',
           status: isDraft ? 'draft' : 'active'
         })
         .select()
@@ -376,7 +375,7 @@ export function JobForm() {
     } catch (err: any) {
       console.error('Job creation error:', err);
       setError(err.message);
-      toast.error('Failed to create job');
+      toast.error(isDraft ? 'Failed to save draft' : 'Failed to create job');
     } finally {
       setIsLoading(false);
     }
@@ -493,7 +492,7 @@ export function JobForm() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
+                <Label htmlFor="category">Category</Label>
                 <Select value={formData.category_id} onValueChange={(value) => handleInputChange('category_id', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
@@ -518,7 +517,7 @@ export function JobForm() {
                   className="min-h-32 transition-all duration-200 focus:ring-2 focus:ring-blue-500"
                   rows={6}
                 />
-                <p className="text-xs text-gray-500">{formData.description.length} characters (minimum 100)</p>
+                <p className="text-xs text-gray-500">{formData.description.length} characters (minimum 50 for publishing)</p>
               </div>
             </TabsContent>
 
@@ -844,7 +843,7 @@ export function JobForm() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="terms_conditions">Terms & Conditions *</Label>
+                <Label htmlFor="terms_conditions">Terms & Conditions</Label>
                 <Textarea
                   id="terms_conditions"
                   value={formData.terms_conditions}
@@ -852,6 +851,7 @@ export function JobForm() {
                   placeholder="Define your service terms, refund policy, revision limits, etc."
                   rows={6}
                 />
+                <p className="text-xs text-gray-500">Required for publishing your gig</p>
               </div>
             </TabsContent>
           </Tabs>
@@ -879,7 +879,7 @@ export function JobForm() {
               </Button>
               <Button
                 onClick={() => handleSubmit(false)}
-                disabled={isLoading}
+                disabled={isLoading || !formData.title.trim() || !formData.description.trim()}
                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 {isLoading ? (
@@ -892,6 +892,11 @@ export function JobForm() {
                 )}
               </Button>
             </div>
+          </div>
+          
+          <div className="text-sm text-gray-500">
+            <p>* Required fields</p>
+            <p>Note: You can save your gig as a draft and publish it later when all required fields are completed.</p>
           </div>
         </CardContent>
       </Card>
